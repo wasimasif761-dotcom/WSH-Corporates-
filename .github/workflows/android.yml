@@ -1,0 +1,51 @@
+name: Android CI/CD
+
+on:
+  push:
+    branches: [ "main", "master" ]
+  pull_request:
+    branches: [ "main", "master" ]
+  workflow_dispatch: # Allows manual triggering from the GitHub UI
+
+jobs:
+  build:
+    name: Build & Test Android App
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout Code
+      uses: actions/checkout@v4
+
+    - name: Set up JDK 17
+      uses: actions/setup-java@v4
+      with:
+        java-version: '17'
+        distribution: 'temurin'
+        cache: 'gradle'
+
+    - name: Setup Gradle Wrapper
+      # Generates the gradlew script if not present, and makes it executable
+      run: |
+        if [ ! -f gradlew ]; then
+          gradle wrapper
+        fi
+        chmod +x gradlew
+
+    - name: Setup Gradle Build Action
+      uses: gradle/actions/setup-gradle@v4
+
+    - name: Run Code Linter
+      run: ./gradlew lintDebug --continue
+
+    - name: Run Unit Tests
+      run: ./gradlew testDebugUnitTest --continue
+
+    - name: Build Debug APK
+      run: ./gradlew assembleDebug
+
+    - name: Upload Debug APK Artifact
+      uses: actions/upload-artifact@v4
+      with:
+        name: WSH-Corporates-POS-Debug-APK
+        path: app/build/outputs/apk/debug/app-debug.apk
+        if-no-files-found: warn
