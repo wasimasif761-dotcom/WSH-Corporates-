@@ -11,6 +11,8 @@ jobs:
   build:
     name: Build & Test Android App
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
 
     steps:
     - name: Checkout Code
@@ -59,3 +61,23 @@ jobs:
         name: WSH-Corporates-POS-Debug-APK
         path: app/build/outputs/apk/debug/app-debug.apk
         if-no-files-found: warn
+
+    - name: Create GitHub Release and Upload APK
+      if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master'
+      uses: softprops/action-gh-release@v2
+      with:
+        tag_name: latest
+        name: Latest Build
+        body: |
+          ### 🚀 Latest Build Completed Successfully!
+          
+          Here is your raw, unzipped APK. You can download and install it directly on your Android phone:
+          
+          👉 **[Download app-debug.apk Directly](https://github.com/${{ github.repository }}/releases/download/latest/app-debug.apk)** (No unzip or converters needed!)
+          
+          _Commit: ${{ github.sha }}_
+        files: app/build/outputs/apk/debug/app-debug.apk
+        draft: false
+        prerelease: false
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
