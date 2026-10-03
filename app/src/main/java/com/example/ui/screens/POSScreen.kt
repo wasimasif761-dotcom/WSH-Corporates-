@@ -52,6 +52,9 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
+import com.google.mlkit.vision.codescanner.GmsBarcodeScanning
+import com.google.mlkit.vision.barcode.common.Barcode
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.testTag
@@ -92,15 +95,16 @@ fun POSScreen(
     var selectedCategory by remember { mutableStateOf("All") }
     var selectedPaymentMethod by remember { mutableStateOf("Cash") }
     var customerName by remember { mutableStateOf("Walk-in Retail Customer") }
-    var discountText by remember { mutableStateOf("0.00") }
+    var discountText by remember { mutableStateOf("0") }
     var appliedPromoCode by remember { mutableStateOf<String?>(null) }
     var cashTenderedText by remember { mutableStateOf("") }
 
     val subtotal = remember(cartItems) { cartItems.sumOf { it.subtotal } }
     val taxRate = storeSettings.vatRatePercent // KSA default 15% or store configured
-    val taxAmount = subtotal * (taxRate / 100.0)
-    val discount = discountText.toDoubleOrNull() ?: 0.0
-    val grandTotal = (subtotal + taxAmount - discount).coerceAtLeast(0.0)
+    val discountPercent = discountText.toDoubleOrNull() ?: 0.0
+    val discountAmount = subtotal * (discountPercent / 100.0)
+    val taxAmount = (subtotal - discountAmount).coerceAtLeast(0.0) * (taxRate / 100.0)
+    val grandTotal = (subtotal - discountAmount + taxAmount).coerceAtLeast(0.0)
 
     val cashTendered = cashTenderedText.toDoubleOrNull() ?: 0.0
     val changeDue = (cashTendered - grandTotal).coerceAtLeast(0.0)
@@ -240,18 +244,49 @@ fun POSScreen(
 
                         Spacer(modifier = Modifier.width(8.dp))
 
+                        val context = LocalContext.current
                         Button(
                             onClick = {
                                 if (scannedBarcode.isNotBlank()) {
                                     onScanCode(scannedBarcode)
                                     scannedBarcode = ""
+                                } else {
+                                    try {
+                                        val scanner = GmsBarcodeScanning.getClient(context)
+                                        scanner.startScan()
+                                            .addOnSuccessListener { barcode: Barcode ->
+                                                barcode.rawValue?.let { code ->
+                                                    onScanCode(code)
+                                                }
+                                            }
+                                            .addOnFailureListener { e: Exception ->
+                                                android.widget.Toast.makeText(
+                                                    context,
+                                                    "Scan: " + (e.message ?: "Cancelled"),
+                                                    android.widget.Toast.LENGTH_SHORT
+                                                ).show()
+                                            }
+                                    } catch (e: Exception) {
+                                        android.widget.Toast.makeText(
+                                            context,
+                                            "Scanner: " + e.message,
+                                            android.widget.Toast.LENGTH_LONG
+                                        ).show()
+                                    }
                                 }
                             },
                             shape = RoundedCornerShape(12.dp),
                             colors = ButtonDefaults.buttonColors(containerColor = CorporateBlue),
                             modifier = Modifier.testTag("pos_scan_btn")
                         ) {
-                            Text("Scan")
+                            Icon(
+                                imageVector = Icons.Default.QrCodeScanner,
+                                contentDescription = null,
+                                modifier = Modifier.size(16.dp),
+                                tint = Color.White
+                            )
+                            Spacer(modifier = Modifier.width(4.dp))
+                            Text("Scan", color = Color.White)
                         }
                     }
 
@@ -494,12 +529,11 @@ fun POSScreen(
                         ) {
                             // Quick Percentage Off Buttons
                             listOf(5, 10, 15, 20).forEach { pct ->
-                                val calculated = subtotal * (pct / 100.0)
                                 FilterChip(
                                     selected = appliedPromoCode == "$pct%",
                                     onClick = {
                                         appliedPromoCode = "$pct%"
-                                        discountText = String.format(Locale.US, "%.2f", calculated)
+                                        discountText = "$pct"
                                     },
                                     label = { Text("$pct% OFF") }
                                 )
@@ -510,9 +544,13 @@ fun POSScreen(
                                 FilterChip(
                                     selected = appliedPromoCode == offer.code,
                                     onClick = {
-                                        val disc = offer.calculateDiscount(subtotal)
                                         appliedPromoCode = offer.code
-                                        discountText = String.format(Locale.US, "%.2f", disc)
+                                        if (offer.discountPercent > 0) {
+                                            discountText = String.format(Locale.US, "%.0f", offer.discountPercent)
+                                        } else {
+                                            val pct = if (subtotal > 0) (offer.flatDiscount / subtotal) * 100.0 else 0.0
+                                            discountText = String.format(Locale.US, "%.1f", pct)
+                                        }
                                     },
                                     label = { Text("${offer.code} (${offer.title})") }
                                 )
@@ -531,6 +569,9 @@ fun POSScreen(
                         ) {
                             PosCalculationRow("Subtotal (المجموع)", storeSettings.formatPrice(subtotal))
                             PosCalculationRow("VAT / الضريبة (${taxRate.toInt()}%)", storeSettings.formatPrice(taxAmount))
+                            if (discountAmount > 0.0) {
+                                PosCalculationRow("Discount Value / الخصم المتراكم", "- " + storeSettings.formatPrice(discountAmount))
+                            }
 
                             Row(
                                 modifier = Modifier
@@ -541,7 +582,7 @@ fun POSScreen(
                             ) {
                                 Row(verticalAlignment = Alignment.CenterVertically) {
                                     Text(
-                                        text = "Discount Applied (الخصم):",
+                                        text = "Discount Rate (الخصم %):",
                                         style = MaterialTheme.typography.bodySmall,
                                         color = MaterialTheme.colorScheme.onSurfaceVariant
                                     )
@@ -571,10 +612,11 @@ fun POSScreen(
                                         discountText = it
                                         appliedPromoCode = null
                                     },
+                                    suffix = { Text("%", fontWeight = FontWeight.Bold) },
                                     singleLine = true,
                                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
                                     modifier = Modifier
-                                        .width(90.dp)
+                                        .width(100.dp)
                                         .height(44.dp)
                                         .testTag("pos_discount_input")
                                 )
@@ -708,7 +750,7 @@ fun POSScreen(
                         // Checkout & Generate Invoice Button
                         Button(
                             onClick = {
-                                onCheckout(selectedPaymentMethod, taxRate, discount, customerName)
+                                onCheckout(selectedPaymentMethod, taxRate, discountAmount, customerName)
                             },
                             colors = ButtonDefaults.buttonColors(containerColor = EmeraldSuccess),
                             shape = RoundedCornerShape(14.dp),

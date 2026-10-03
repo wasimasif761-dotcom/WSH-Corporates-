@@ -247,7 +247,8 @@ fun MainAppScreen(
                                 showRecordSaleDialog = true
                             },
                             onSelectTransaction = { tx ->
-                                viewModel.showInvoicePreview(listOf(tx))
+                                val invoiceTxList = allTransactions.filter { it.invoiceNumber == tx.invoiceNumber }
+                                viewModel.showInvoicePreview(invoiceTxList.ifEmpty { listOf(tx) })
                             }
                         )
                     }
@@ -310,7 +311,8 @@ fun MainAppScreen(
                                 showRecordSaleDialog = true
                             },
                             onSelectTransaction = { tx ->
-                                viewModel.showInvoicePreview(listOf(tx))
+                                val invoiceTxList = allTransactions.filter { it.invoiceNumber == tx.invoiceNumber }
+                                viewModel.showInvoicePreview(invoiceTxList.ifEmpty { listOf(tx) })
                             }
                         )
                     }
