@@ -20,7 +20,8 @@ class InventraApplication : Application() {
             database.productDao(),
             database.transactionDao(),
             database.userDao(),
-            database.refundDao()
+            database.refundDao(),
+            database.customerDao()
         )
     }
 }

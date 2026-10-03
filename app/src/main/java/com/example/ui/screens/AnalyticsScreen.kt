@@ -23,14 +23,23 @@ import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.PieChart
 import androidx.compose.material.icons.filled.TrendingUp
 import androidx.compose.material.icons.filled.Warning
+import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Divider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -56,6 +65,7 @@ import java.util.Locale
 fun AnalyticsScreen(
     stats: DashboardStats,
     allProducts: List<Product>,
+    onGeneratePO: (supplierName: String, poText: String) -> Unit = { _, _ -> },
     modifier: Modifier = Modifier
 ) {
     val inStockCount = allProducts.count { !it.isLowStock && !it.isOutOfStock }
@@ -354,6 +364,135 @@ fun AnalyticsScreen(
                             )
                         }
                         Divider(modifier = Modifier.padding(vertical = 2.dp))
+                    }
+                }
+            }
+        }
+
+        // ERP Stock Replenisher / Purchase Order Generator
+        val lowStockList = allProducts.filter { it.isLowStock || it.isOutOfStock }
+        if (lowStockList.isNotEmpty()) {
+            item {
+                Card(
+                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+                    shape = RoundedCornerShape(16.dp),
+                    elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Column(modifier = Modifier.padding(16.dp)) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Icon(
+                                imageVector = Icons.Default.Warning,
+                                contentDescription = null,
+                                tint = RoseDanger,
+                                modifier = Modifier.size(20.dp)
+                            )
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text(
+                                text = "ERP Stock Replenishment Planner",
+                                style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
+                                color = MaterialTheme.colorScheme.onSurface
+                            )
+                        }
+                        Text(
+                            text = "NetSuite & Cin7 Automatic Stock Replenisher",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+
+                        Spacer(modifier = Modifier.height(12.dp))
+
+                        // Calculate totals
+                        val totalReplenishQty = lowStockList.sumOf { (it.minStockThreshold * 2) - it.quantity }
+                        val totalReplenishCost = lowStockList.sumOf { ((it.minStockThreshold * 2) - it.quantity) * it.costPrice }
+
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clip(RoundedCornerShape(10.dp))
+                                .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f))
+                                .padding(10.dp),
+                            horizontalArrangement = Arrangement.SpaceBetween
+                        ) {
+                            Column {
+                                Text("Low Stock Items", style = MaterialTheme.typography.labelSmall)
+                                Text("${lowStockList.size} SKUs", style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Bold))
+                            }
+                            Column {
+                                Text("Reorder Volume", style = MaterialTheme.typography.labelSmall)
+                                Text("$totalReplenishQty units", style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Bold))
+                            }
+                            Column(horizontalAlignment = Alignment.End) {
+                                Text("Replenishment Cost", style = MaterialTheme.typography.labelSmall)
+                                Text(
+                                    text = String.format(Locale.US, "$%,.2f", totalReplenishCost),
+                                    style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Bold),
+                                    color = CorporateBlue
+                                )
+                            }
+                        }
+
+                        Spacer(modifier = Modifier.height(12.dp))
+
+                        Text(
+                            text = "Items requiring urgent replenishment:",
+                            style = MaterialTheme.typography.bodySmall.copy(fontWeight = FontWeight.Bold),
+                            color = MaterialTheme.colorScheme.onSurface
+                        )
+                        Spacer(modifier = Modifier.height(6.dp))
+
+                        Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                            lowStockList.take(5).forEach { prod ->
+                                val reorderQty = (prod.minStockThreshold * 2) - prod.quantity
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.SpaceBetween
+                                ) {
+                                    Text(
+                                        text = "• ${prod.name.take(24)}...",
+                                        style = MaterialTheme.typography.labelMedium,
+                                        color = MaterialTheme.colorScheme.onSurface
+                                    )
+                                    Text(
+                                        text = "Need $reorderQty ${prod.unit} (Cost: ${String.format(Locale.US, "$%,.2f", reorderQty * prod.costPrice)})",
+                                        style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.SemiBold),
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
+                                }
+                            }
+                        }
+
+                        Spacer(modifier = Modifier.height(14.dp))
+
+                        var supplierName by remember { mutableStateOf("") }
+                        OutlinedTextField(
+                            value = supplierName,
+                            onValueChange = { supplierName = it },
+                            placeholder = { Text("Enter Supplier Name (e.g. Nestle Dist.)") },
+                            singleLine = true,
+                            shape = RoundedCornerShape(10.dp),
+                            modifier = Modifier.fillMaxWidth()
+                        )
+
+                        Spacer(modifier = Modifier.height(8.dp))
+
+                        Button(
+                            onClick = {
+                                if (supplierName.isNotBlank()) {
+                                    val poText = lowStockList.joinToString("\n") { prod ->
+                                        "${prod.name} (SKU: ${prod.sku}) - Qty: ${(prod.minStockThreshold * 2) - prod.quantity}"
+                                    }
+                                    onGeneratePO(supplierName, poText)
+                                    supplierName = ""
+                                }
+                            },
+                            enabled = supplierName.isNotBlank(),
+                            colors = ButtonDefaults.buttonColors(containerColor = CorporateBlue),
+                            shape = RoundedCornerShape(10.dp),
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Text("Generate Purchase Order (PO)", fontWeight = FontWeight.Bold)
+                        }
                     }
                 }
             }

@@ -1,10 +1,12 @@
 package com.example.data.repository
 
+import com.example.data.local.CustomerDao
 import com.example.data.local.InventoryDatabase
 import com.example.data.local.ProductDao
 import com.example.data.local.RefundDao
 import com.example.data.local.TransactionDao
 import com.example.data.local.UserDao
+import com.example.data.model.CustomerProfile
 import com.example.data.model.Product
 import com.example.data.model.RefundRecord
 import com.example.data.model.SaleTransaction
@@ -50,8 +52,15 @@ interface InventoryRepository {
         taxPercent: Double = 15.0,
         discountAmount: Double = 0.0,
         customerName: String = "Walk-in Retail Customer",
-        cashierName: String = "Waseem"
+        cashierName: String = "Waseem",
+        customerId: Long? = null,
+        loyaltyPointsRedeemed: Int = 0
     ): Result<List<SaleTransaction>>
+    val allCustomers: Flow<List<CustomerProfile>>
+    suspend fun insertCustomer(customer: CustomerProfile): Long
+    suspend fun updateCustomer(customer: CustomerProfile)
+    suspend fun deleteCustomer(customer: CustomerProfile)
+    suspend fun updateCustomerLoyaltyPoints(customerId: Long, points: Int)
     suspend fun login(username: String, password: String): UserAccount?
     suspend fun registerUser(user: UserAccount): Result<UserAccount>
     suspend fun processRefund(
@@ -75,7 +84,8 @@ class InventoryRepositoryImpl(
     private val productDao: ProductDao,
     private val transactionDao: TransactionDao,
     private val userDao: UserDao,
-    private val refundDao: RefundDao
+    private val refundDao: RefundDao,
+    private val customerDao: CustomerDao
 ) : InventoryRepository {
 
     override val allProducts: Flow<List<Product>> = productDao.getAllProducts()
@@ -85,6 +95,7 @@ class InventoryRepositoryImpl(
     override val totalRevenue: Flow<Double?> = transactionDao.getTotalRevenue()
     override val allUsers: Flow<List<UserAccount>> = userDao.getAllUsers()
     override val allRefunds: Flow<List<RefundRecord>> = refundDao.getAllRefundRecords()
+    override val allCustomers: Flow<List<CustomerProfile>> = customerDao.getAllCustomers()
 
     override fun searchProducts(query: String): Flow<List<Product>> {
         return if (query.isBlank()) {
@@ -187,7 +198,9 @@ class InventoryRepositoryImpl(
         taxPercent: Double,
         discountAmount: Double,
         customerName: String,
-        cashierName: String
+        cashierName: String,
+        customerId: Long?,
+        loyaltyPointsRedeemed: Int
     ): Result<List<SaleTransaction>> {
         if (items.isEmpty()) {
             return Result.failure(IllegalArgumentException("Cart is empty"))
@@ -208,6 +221,17 @@ class InventoryRepositoryImpl(
         val timestamp = System.currentTimeMillis()
 
         val subtotalOverall = items.sumOf { it.subtotal }
+
+        // Update customer loyalty points in DB
+        if (customerId != null) {
+            val customer = customerDao.getCustomerById(customerId)
+            if (customer != null) {
+                val pointsAwarded = (subtotalOverall / 10.0).toInt()
+                val finalPoints = (customer.loyaltyPoints - loyaltyPointsRedeemed + pointsAwarded).coerceAtLeast(0)
+                customerDao.updateCustomer(customer.copy(loyaltyPoints = finalPoints))
+            }
+        }
+
         val createdTransactions = mutableListOf<SaleTransaction>()
 
         for (item in items) {
@@ -407,5 +431,21 @@ class InventoryRepositoryImpl(
                 productDao.insertProduct(product)
             }
         }
+    }
+
+    override suspend fun insertCustomer(customer: CustomerProfile): Long {
+        return customerDao.insertCustomer(customer)
+    }
+
+    override suspend fun updateCustomer(customer: CustomerProfile) {
+        customerDao.updateCustomer(customer)
+    }
+
+    override suspend fun deleteCustomer(customer: CustomerProfile) {
+        customerDao.deleteCustomer(customer)
+    }
+
+    override suspend fun updateCustomerLoyaltyPoints(customerId: Long, points: Int) {
+        customerDao.updateLoyaltyPoints(customerId, points)
     }
 }

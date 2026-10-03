@@ -53,6 +53,7 @@ fun NavigationDrawerContent(
     onNavigate: (AppScreen) -> Unit,
     onOpenStoreSettings: () -> Unit,
     onOpenOffers: () -> Unit,
+    onOpenCRM: () -> Unit,
     onResetDemoData: () -> Unit,
     onShowAbout: () -> Unit,
     modifier: Modifier = Modifier
@@ -239,6 +240,17 @@ fun NavigationDrawerContent(
                 modifier = Modifier
                     .padding(vertical = 3.dp)
                     .testTag("drawer_offers")
+            )
+
+            NavigationDrawerItem(
+                label = { Text("CRM Customer Loyalty") },
+                icon = { Icon(Icons.Default.Verified, contentDescription = null) },
+                selected = false,
+                onClick = onOpenCRM,
+                shape = RoundedCornerShape(12.dp),
+                modifier = Modifier
+                    .padding(vertical = 3.dp)
+                    .testTag("drawer_crm")
             )
 
             NavigationDrawerItem(

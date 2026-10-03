@@ -3,6 +3,7 @@ package com.example.ui.viewmodel
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
+import com.example.data.model.CustomerProfile
 import com.example.data.model.DiscountOffer
 import com.example.data.model.Product
 import com.example.data.model.RefundRecord
@@ -121,6 +122,13 @@ class InventoryViewModel(
         )
 
     val allRefunds: StateFlow<List<RefundRecord>> = repository.allRefunds
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5000),
+            initialValue = emptyList()
+        )
+
+    val allCustomers: StateFlow<List<CustomerProfile>> = repository.allCustomers
         .stateIn(
             scope = viewModelScope,
             started = SharingStarted.WhileSubscribed(5000),
@@ -363,6 +371,8 @@ class InventoryViewModel(
         taxPercent: Double = _storeSettings.value.vatRatePercent,
         discountAmount: Double,
         customerName: String,
+        customerId: Long? = null,
+        loyaltyPointsRedeemed: Int = 0,
         onComplete: (Boolean, String) -> Unit
     ) {
         viewModelScope.launch {
@@ -378,7 +388,9 @@ class InventoryViewModel(
                 taxPercent = taxPercent,
                 discountAmount = discountAmount,
                 customerName = customerName,
-                cashierName = developerName
+                cashierName = developerName,
+                customerId = customerId,
+                loyaltyPointsRedeemed = loyaltyPointsRedeemed
             )
 
             result.onSuccess { transactions ->
@@ -592,6 +604,71 @@ class InventoryViewModel(
             }.onFailure { err ->
                 _eventFlow.emit(UiEvent.ShowSnackbar(err.message ?: "Exchange failed", isError = true))
             }
+        }
+    }
+
+    private val _currentBranchName = MutableStateFlow("Olaya, Riyadh HQ")
+    val currentBranchName: StateFlow<String> = _currentBranchName.asStateFlow()
+
+    fun setBranch(branchName: String) {
+        _currentBranchName.value = branchName
+        viewModelScope.launch {
+            _eventFlow.emit(UiEvent.ShowSnackbar("Switched active terminal to: $branchName"))
+        }
+    }
+
+    fun dispatchStockToBranch(productId: Long, qty: Int, targetBranch: String) {
+        viewModelScope.launch {
+            val result = repository.adjustStock(productId, -qty)
+            result.onSuccess {
+                _eventFlow.emit(UiEvent.ShowSnackbar("Dispatched $qty units from Main Warehouse to $targetBranch"))
+            }.onFailure { err ->
+                _eventFlow.emit(UiEvent.ShowSnackbar("Dispatch failed: ${err.message}", isError = true))
+            }
+        }
+    }
+
+    fun createCustomer(name: String, phone: String, email: String = "", onResult: (Boolean, String) -> Unit = { _, _ -> }) {
+        viewModelScope.launch {
+            if (name.isBlank() || phone.isBlank()) {
+                onResult(false, "Customer name and mobile number are required")
+                return@launch
+            }
+            val customer = CustomerProfile(name = name.trim(), phone = phone.trim(), email = email.trim())
+            val id = repository.insertCustomer(customer)
+            if (id > 0) {
+                _eventFlow.emit(UiEvent.ShowSnackbar("CRM Profile created for ${customer.name} • 0 points"))
+                onResult(true, "Customer successfully registered")
+            } else {
+                onResult(false, "Failed to register customer")
+            }
+        }
+    }
+
+    fun updateCustomer(customer: CustomerProfile) {
+        viewModelScope.launch {
+            repository.updateCustomer(customer)
+            _eventFlow.emit(UiEvent.ShowSnackbar("CRM Customer Profile updated"))
+        }
+    }
+
+    fun deleteCustomer(customer: CustomerProfile) {
+        viewModelScope.launch {
+            repository.deleteCustomer(customer)
+            _eventFlow.emit(UiEvent.ShowSnackbar("CRM Customer profile removed"))
+        }
+    }
+
+    fun generatePurchaseOrder(supplierName: String, poText: String, onResult: (Boolean, String) -> Unit = { _, _ -> }) {
+        viewModelScope.launch {
+            if (supplierName.isBlank()) {
+                onResult(false, "Supplier name cannot be empty")
+                return@launch
+            }
+            val poNum = "PO-WSH-${1000 + (System.currentTimeMillis() % 9000)}"
+            val msg = "ERP: Purchase Order $poNum generated & queued for dispatch to $supplierName!"
+            _eventFlow.emit(UiEvent.ShowSnackbar(msg))
+            onResult(true, poNum)
         }
     }
 

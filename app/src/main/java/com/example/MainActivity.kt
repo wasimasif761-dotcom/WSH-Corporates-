@@ -54,6 +54,7 @@ import com.example.ui.components.ProductDetailDialog
 import com.example.ui.components.RecordSaleDialog
 import com.example.ui.components.RefundExchangeDialog
 import com.example.ui.components.StoreSettingsDialog
+import com.example.ui.components.CrmProfilesDialog
 import com.example.ui.screens.AnalyticsScreen
 import com.example.ui.screens.AppScreen
 import com.example.ui.screens.DashboardScreen
@@ -109,6 +110,7 @@ fun MainAppScreen(
     var showAboutDialog by remember { mutableStateOf(false) }
     var showStoreSettingsDialog by remember { mutableStateOf(false) }
     var showOffersDialog by remember { mutableStateOf(false) }
+    var showCrmDialog by remember { mutableStateOf(false) }
     var showChatbotDialog by remember { mutableStateOf(false) }
     var showAuthDialog by remember { mutableStateOf(false) }
     var showRefundExchangeDialog by remember { mutableStateOf(false) }
@@ -126,6 +128,7 @@ fun MainAppScreen(
     val discountOffers by viewModel.discountOffers.collectAsStateWithLifecycle()
     val currentUser by viewModel.currentUser.collectAsStateWithLifecycle()
     val allUsers by viewModel.allUsers.collectAsStateWithLifecycle()
+    val allCustomers by viewModel.allCustomers.collectAsStateWithLifecycle()
 
     val searchQuery by viewModel.searchQuery.collectAsStateWithLifecycle()
     val selectedCategory by viewModel.selectedCategory.collectAsStateWithLifecycle()
@@ -171,6 +174,10 @@ fun MainAppScreen(
                 onOpenOffers = {
                     coroutineScope.launch { drawerState.close() }
                     showOffersDialog = true
+                },
+                onOpenCRM = {
+                    coroutineScope.launch { drawerState.close() }
+                    showCrmDialog = true
                 },
                 onResetDemoData = {
                     coroutineScope.launch { drawerState.close() }
@@ -260,14 +267,15 @@ fun MainAppScreen(
                             developerName = viewModel.developerName,
                             storeSettings = storeSettings,
                             discountOffers = discountOffers,
+                            allCustomers = allCustomers,
                             onScanCode = { code -> viewModel.scanBarcodeOrSku(code) },
                             onAddToCart = { product -> viewModel.addToCart(product) },
                             onUpdateQuantity = { id, qty -> viewModel.updateCartItemQuantity(id, qty) },
                             onRemoveFromCart = { id -> viewModel.removeFromCart(id) },
                             onClearCart = { viewModel.clearCart() },
                             onOpenOffers = { showOffersDialog = true },
-                            onCheckout = { method, tax, disc, cust ->
-                                viewModel.completePosCheckout(method, tax, disc, cust) { _, _ -> }
+                            onCheckout = { method, tax, disc, cust, custId, ptsRedeemed ->
+                                viewModel.completePosCheckout(method, tax, disc, cust, custId, ptsRedeemed) { _, _ -> }
                             }
                         )
                     }
@@ -320,7 +328,10 @@ fun MainAppScreen(
                     AppScreen.ANALYTICS -> {
                         AnalyticsScreen(
                             stats = dashboardStats,
-                            allProducts = allProducts
+                            allProducts = allProducts,
+                            onGeneratePO = { supplier, poText ->
+                                viewModel.generatePurchaseOrder(supplier, poText)
+                            }
                         )
                     }
                 }
@@ -455,6 +466,20 @@ fun MainAppScreen(
             onDismiss = { showOffersDialog = false },
             onAddOffer = { newOffer -> viewModel.addDiscountOffer(newOffer) },
             onRemoveOffer = { code -> viewModel.removeDiscountOffer(code) }
+        )
+    }
+
+    // Dialog: Customer CRM profiles (Square & Shopify Loyalty Engine)
+    if (showCrmDialog) {
+        CrmProfilesDialog(
+            customers = allCustomers,
+            onDismiss = { showCrmDialog = false },
+            onAddCustomer = { name, phone, email ->
+                viewModel.createCustomer(name, phone, email)
+            },
+            onDeleteCustomer = { customer ->
+                viewModel.deleteCustomer(customer)
+            }
         )
     }
 

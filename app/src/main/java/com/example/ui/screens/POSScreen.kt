@@ -33,6 +33,7 @@ import androidx.compose.material.icons.filled.Receipt
 import androidx.compose.material.icons.filled.Remove
 import androidx.compose.material.icons.filled.ShoppingBag
 import androidx.compose.material.icons.filled.ShoppingCart
+import androidx.compose.material.icons.filled.Star
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
@@ -53,8 +54,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
-import com.google.mlkit.vision.codescanner.GmsBarcodeScanning
-import com.google.mlkit.vision.barcode.common.Barcode
+import com.example.ui.components.BarcodeScannerDialog
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.testTag
@@ -82,19 +82,23 @@ fun POSScreen(
     developerName: String,
     storeSettings: StoreSettings = StoreSettings(),
     discountOffers: List<DiscountOffer> = emptyList(),
+    allCustomers: List<com.example.data.model.CustomerProfile> = emptyList(),
     onScanCode: (String) -> Unit,
     onAddToCart: (Product) -> Unit,
     onUpdateQuantity: (productId: Long, quantity: Int) -> Unit,
     onRemoveFromCart: (productId: Long) -> Unit,
     onClearCart: () -> Unit,
     onOpenOffers: () -> Unit = {},
-    onCheckout: (paymentMethod: String, taxPercent: Double, discount: Double, customerName: String) -> Unit,
+    onCheckout: (paymentMethod: String, taxPercent: Double, discount: Double, customerName: String, customerId: Long?, pointsRedeemed: Int) -> Unit,
     modifier: Modifier = Modifier
 ) {
     var scannedBarcode by remember { mutableStateOf("") }
+    var showBarcodeScanner by remember { mutableStateOf(false) }
     var selectedCategory by remember { mutableStateOf("All") }
     var selectedPaymentMethod by remember { mutableStateOf("Cash") }
     var customerName by remember { mutableStateOf("Walk-in Retail Customer") }
+    var selectedCustomerId by remember { mutableStateOf<Long?>(null) }
+    var redeemLoyaltyPoints by remember { mutableStateOf(false) }
     var discountText by remember { mutableStateOf("0") }
     var appliedPromoCode by remember { mutableStateOf<String?>(null) }
     var cashTenderedText by remember { mutableStateOf("") }
@@ -102,7 +106,15 @@ fun POSScreen(
     val subtotal = remember(cartItems) { cartItems.sumOf { it.subtotal } }
     val taxRate = storeSettings.vatRatePercent // KSA default 15% or store configured
     val discountPercent = discountText.toDoubleOrNull() ?: 0.0
-    val discountAmount = subtotal * (discountPercent / 100.0)
+
+    val selectedCustomer = remember(selectedCustomerId, allCustomers) {
+        allCustomers.find { it.id == selectedCustomerId }
+    }
+    val pointsRedemptionAmount = if (redeemLoyaltyPoints && selectedCustomer != null) {
+        selectedCustomer.loyaltyPoints.toDouble().coerceAtMost(subtotal)
+    } else 0.0
+
+    val discountAmount = subtotal * (discountPercent / 100.0) + pointsRedemptionAmount
     val taxAmount = (subtotal - discountAmount).coerceAtLeast(0.0) * (taxRate / 100.0)
     val grandTotal = (subtotal - discountAmount + taxAmount).coerceAtLeast(0.0)
 
@@ -244,35 +256,13 @@ fun POSScreen(
 
                         Spacer(modifier = Modifier.width(8.dp))
 
-                        val context = LocalContext.current
                         Button(
                             onClick = {
                                 if (scannedBarcode.isNotBlank()) {
                                     onScanCode(scannedBarcode)
                                     scannedBarcode = ""
                                 } else {
-                                    try {
-                                        val scanner = GmsBarcodeScanning.getClient(context)
-                                        scanner.startScan()
-                                            .addOnSuccessListener { barcode: Barcode ->
-                                                barcode.rawValue?.let { code ->
-                                                    onScanCode(code)
-                                                }
-                                            }
-                                            .addOnFailureListener { e: Exception ->
-                                                android.widget.Toast.makeText(
-                                                    context,
-                                                    "Scan: " + (e.message ?: "Cancelled"),
-                                                    android.widget.Toast.LENGTH_SHORT
-                                                ).show()
-                                            }
-                                    } catch (e: Exception) {
-                                        android.widget.Toast.makeText(
-                                            context,
-                                            "Scanner: " + e.message,
-                                            android.widget.Toast.LENGTH_LONG
-                                        ).show()
-                                    }
+                                    showBarcodeScanner = true
                                 }
                             },
                             shape = RoundedCornerShape(12.dp),
@@ -735,9 +725,105 @@ fun POSScreen(
 
                         Spacer(modifier = Modifier.height(12.dp))
 
+                        Text(
+                            text = "CRM Customer Selector (رابط العميل):",
+                            style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
+                            color = MaterialTheme.colorScheme.onSurface
+                        )
+                        Spacer(modifier = Modifier.height(4.dp))
+
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .horizontalScroll(rememberScrollState()),
+                            horizontalArrangement = Arrangement.spacedBy(6.dp)
+                        ) {
+                            FilterChip(
+                                selected = selectedCustomerId == null,
+                                onClick = {
+                                    selectedCustomerId = null
+                                    customerName = "Walk-in Retail Customer"
+                                    redeemLoyaltyPoints = false
+                                },
+                                label = { Text("Walk-in (Retail)") }
+                            )
+
+                            allCustomers.forEach { cust ->
+                                FilterChip(
+                                    selected = selectedCustomerId == cust.id,
+                                    onClick = {
+                                        selectedCustomerId = cust.id
+                                        customerName = cust.name
+                                        redeemLoyaltyPoints = false
+                                    },
+                                    label = { Text("${cust.name} (${cust.loyaltyPoints} pts)") }
+                                )
+                            }
+                        }
+
+                        selectedCustomer?.let { cust ->
+                            Card(
+                                colors = CardDefaults.cardColors(containerColor = EmeraldSuccessBg.copy(alpha = 0.3f)),
+                                shape = RoundedCornerShape(12.dp),
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(vertical = 8.dp)
+                            ) {
+                                Row(
+                                    modifier = Modifier.padding(10.dp),
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.SpaceBetween
+                                ) {
+                                    Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.weight(1f)) {
+                                        Icon(
+                                            imageVector = Icons.Default.Star,
+                                            contentDescription = null,
+                                            tint = EmeraldSuccess,
+                                            modifier = Modifier.size(16.dp)
+                                        )
+                                        Spacer(modifier = Modifier.width(6.dp))
+                                        Column {
+                                            Text(
+                                                text = "CRM Loyalty Member: ${cust.name}",
+                                                style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
+                                                color = EmeraldSuccess
+                                            )
+                                            Text(
+                                                text = "Available: ${cust.loyaltyPoints} pts • Value: ${storeSettings.formatPrice(cust.loyaltyPoints.toDouble())}",
+                                                style = MaterialTheme.typography.bodySmall,
+                                                color = MaterialTheme.colorScheme.onSurface
+                                            )
+                                        }
+                                    }
+
+                                    if (cust.loyaltyPoints > 0) {
+                                        Row(verticalAlignment = Alignment.CenterVertically) {
+                                            Text(
+                                                text = "Redeem?",
+                                                style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
+                                                modifier = Modifier.padding(end = 4.dp)
+                                            )
+                                            androidx.compose.material3.Switch(
+                                                checked = redeemLoyaltyPoints,
+                                                onCheckedChange = { redeemLoyaltyPoints = it }
+                                            )
+                                        }
+                                    }
+                                }
+                            }
+                        }
+
+                        Spacer(modifier = Modifier.height(10.dp))
+
                         OutlinedTextField(
                             value = customerName,
-                            onValueChange = { customerName = it },
+                            onValueChange = { 
+                                customerName = it
+                                if (selectedCustomer?.name != it) {
+                                    selectedCustomerId = null
+                                    redeemLoyaltyPoints = false
+                                }
+                            },
                             label = { Text("Customer Name / VAT Number") },
                             singleLine = true,
                             modifier = Modifier
@@ -750,7 +836,10 @@ fun POSScreen(
                         // Checkout & Generate Invoice Button
                         Button(
                             onClick = {
-                                onCheckout(selectedPaymentMethod, taxRate, discountAmount, customerName)
+                                val redeemedInt = if (redeemLoyaltyPoints && selectedCustomer != null) {
+                                    pointsRedemptionAmount.toInt()
+                                } else 0
+                                onCheckout(selectedPaymentMethod, taxRate, discountAmount, customerName, selectedCustomerId, redeemedInt)
                             },
                             colors = ButtonDefaults.buttonColors(containerColor = EmeraldSuccess),
                             shape = RoundedCornerShape(14.dp),
@@ -870,6 +959,15 @@ fun POSScreen(
                 }
             }
         }
+    }
+
+    if (showBarcodeScanner) {
+        BarcodeScannerDialog(
+            onDismiss = { showBarcodeScanner = false },
+            onBarcodeScanned = { code ->
+                onScanCode(code)
+            }
+        )
     }
 }
 

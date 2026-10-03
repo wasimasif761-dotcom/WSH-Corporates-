@@ -5,6 +5,7 @@ import androidx.room.Database
 import androidx.room.Room
 import androidx.room.RoomDatabase
 import androidx.sqlite.db.SupportSQLiteDatabase
+import com.example.data.model.CustomerProfile
 import com.example.data.model.Product
 import com.example.data.model.RefundRecord
 import com.example.data.model.SaleTransaction
@@ -14,8 +15,8 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 
 @Database(
-    entities = [Product::class, SaleTransaction::class, UserAccount::class, RefundRecord::class],
-    version = 2,
+    entities = [Product::class, SaleTransaction::class, UserAccount::class, RefundRecord::class, CustomerProfile::class],
+    version = 3,
     exportSchema = false
 )
 abstract class InventoryDatabase : RoomDatabase() {
@@ -23,6 +24,7 @@ abstract class InventoryDatabase : RoomDatabase() {
     abstract fun transactionDao(): TransactionDao
     abstract fun userDao(): UserDao
     abstract fun refundDao(): RefundDao
+    abstract fun customerDao(): CustomerDao
 
     companion object {
         @Volatile
@@ -207,7 +209,12 @@ abstract class InventoryDatabase : RoomDatabase() {
             super.onCreate(db)
             INSTANCE?.let { database ->
                 scope.launch(Dispatchers.IO) {
-                    populateInitialData(database.productDao(), database.transactionDao(), database.userDao())
+                    populateInitialData(
+                        database.productDao(),
+                        database.transactionDao(),
+                        database.userDao(),
+                        database.customerDao()
+                    )
                 }
             }
         }
@@ -217,7 +224,8 @@ abstract class InventoryDatabase : RoomDatabase() {
 private suspend fun populateInitialData(
     productDao: ProductDao,
     transactionDao: TransactionDao,
-    userDao: UserDao
+    userDao: UserDao,
+    customerDao: CustomerDao
 ) {
     if (productDao.getProductCount() == 0) {
         val sampleProducts = InventoryDatabase.getSampleProducts()
@@ -282,5 +290,9 @@ private suspend fun populateInitialData(
         initialTransactions.forEach { tx ->
             transactionDao.insertTransaction(tx)
         }
+    }
+
+    if (customerDao.getCustomerCount() == 0) {
+        customerDao.insertCustomers(CustomerProfile.SAMPLE_CUSTOMERS)
     }
 }
