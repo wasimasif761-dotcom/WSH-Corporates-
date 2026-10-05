@@ -381,16 +381,28 @@ fun MainAppScreen(
     if (showRecordSaleDialog) {
         RecordSaleDialog(
             products = allProducts,
-            preSelectedProduct = preselectedSaleProduct,
+            initialProduct = preselectedSaleProduct,
+            storeSettings = storeSettings,
             onDismiss = {
                 showRecordSaleDialog = false
                 preselectedSaleProduct = null
             },
-            onConfirmSale = { productId, qty, notes ->
-                viewModel.recordSale(
-                    productId = productId,
-                    quantitySold = qty,
-                    notes = notes
+            onConfirmSale = { cartItems, paymentMethod, customerName, discountPercent ->
+                // Add items to POS cart with their batch numbers
+                viewModel.clearCart()
+                cartItems.forEach { item ->
+                    viewModel.addToCart(item.product, item.quantity, item.batchNo)
+                }
+                
+                val subtotal = cartItems.sumOf { it.subtotal }
+                val discountAmount = subtotal * (discountPercent / 100.0)
+
+                // Finalize sale using POS checkout logic (groups all items under one invoice!)
+                viewModel.completePosCheckout(
+                    paymentMethod = paymentMethod,
+                    taxPercent = storeSettings.vatRatePercent,
+                    discountAmount = discountAmount,
+                    customerName = customerName.ifBlank { "Walk-in Retail Customer" }
                 ) { success, _ ->
                     if (success) {
                         showRecordSaleDialog = false

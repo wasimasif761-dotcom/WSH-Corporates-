@@ -8,6 +8,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
@@ -67,6 +68,7 @@ fun AddEditProductDialog(
     var minStockThresholdText by remember { mutableStateOf(initialProduct?.minStockThreshold?.toString() ?: "5") }
     var unit by remember { mutableStateOf(initialProduct?.unit ?: "Pcs") }
     var description by remember { mutableStateOf(initialProduct?.description ?: "") }
+    var batchNo by remember { mutableStateOf(initialProduct?.batchNo ?: "") }
     var expiryDateText by remember { mutableStateOf(initialProduct?.formattedExpiryDate?.let { if (it == "No Expiry") "" else it } ?: "") }
 
     var categoryDropdownExpanded by remember { mutableStateOf(false) }
@@ -91,14 +93,19 @@ fun AddEditProductDialog(
     }
 
     Dialog(
-        onDismissRequest = onDismiss
+        onDismissRequest = onDismiss,
+        properties = DialogProperties(
+            usePlatformDefaultWidth = false,
+            decorFitsSystemWindows = false
+        )
     ) {
         Surface(
             shape = RoundedCornerShape(24.dp),
             color = MaterialTheme.colorScheme.surface,
             tonalElevation = 6.dp,
             modifier = Modifier
-                .fillMaxWidth()
+                .fillMaxWidth(0.96f)
+                .imePadding()
                 .padding(horizontal = 8.dp, vertical = 16.dp)
                 .testTag("add_edit_product_dialog")
         ) {
@@ -365,6 +372,20 @@ fun AddEditProductDialog(
 
                 Spacer(modifier = Modifier.height(12.dp))
 
+                // Batch Number
+                OutlinedTextField(
+                    value = batchNo,
+                    onValueChange = { batchNo = it },
+                    label = { Text("Batch Number (رقم التشغيلة)") },
+                    placeholder = { Text("e.g. BATCH-2026-A") },
+                    singleLine = true,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .testTag("input_product_batch")
+                )
+
+                Spacer(modifier = Modifier.height(12.dp))
+
                 // Expiry Date field
                 OutlinedTextField(
                     value = expiryDateText,
@@ -442,6 +463,7 @@ fun AddEditProductDialog(
                                     minStockThreshold = minStockThresholdText.toIntOrNull() ?: 5,
                                     unit = unit.trim().ifBlank { "Pcs" },
                                     description = description.trim(),
+                                    batchNo = batchNo.trim(),
                                     expiryDate = parsedExpiry,
                                     updatedAt = System.currentTimeMillis()
                                 )

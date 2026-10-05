@@ -21,6 +21,7 @@ data class Product(
     val unit: String = "Pcs",
     val description: String = "",
     val expiryDate: Long = 0L, // Timestamp in milliseconds (0 = no expiry)
+    val batchNo: String = "",
     val updatedAt: Long = System.currentTimeMillis()
 ) {
     val isLowStock: Boolean

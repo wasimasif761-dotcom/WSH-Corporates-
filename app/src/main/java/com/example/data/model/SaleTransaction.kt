@@ -28,6 +28,7 @@ data class SaleTransaction(
     val refundTimestamp: Long = 0L,
     val isExchange: Boolean = false,
     val originalInvoiceNumber: String = "",
+    val productBatchNo: String = "",
     val businessName: String = "WSH Corporates Retail Store"
 ) {
     val displayInvoiceNumber: String

@@ -16,7 +16,7 @@ import kotlinx.coroutines.launch
 
 @Database(
     entities = [Product::class, SaleTransaction::class, UserAccount::class, RefundRecord::class, CustomerProfile::class],
-    version = 3,
+    version = 5,
     exportSchema = false
 )
 abstract class InventoryDatabase : RoomDatabase() {

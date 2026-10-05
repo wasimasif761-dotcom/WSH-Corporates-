@@ -16,7 +16,8 @@ import java.util.UUID
 
 data class CartItem(
     val product: Product,
-    val quantity: Int
+    val quantity: Int,
+    val batchNo: String = product.batchNo
 ) {
     val subtotal: Double get() = product.price * quantity
 }
@@ -270,7 +271,8 @@ class InventoryRepositoryImpl(
                 cashierName = cashierName,
                 customerName = customerName,
                 timestamp = timestamp,
-                notes = "POS Checkout"
+                notes = "POS Checkout",
+                productBatchNo = item.batchNo.ifBlank { product.batchNo }
             )
 
             val insertedId = transactionDao.insertTransaction(tx)

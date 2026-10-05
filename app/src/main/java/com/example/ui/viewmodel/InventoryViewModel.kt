@@ -329,16 +329,16 @@ class InventoryViewModel(
         }
     }
 
-    fun addToCart(product: Product, quantityToAdd: Int = 1) {
+    fun addToCart(product: Product, quantityToAdd: Int = 1, batchNo: String = product.batchNo) {
         val currentList = _posCart.value.toMutableList()
         val index = currentList.indexOfFirst { it.product.id == product.id }
         if (index >= 0) {
             val existing = currentList[index]
             val newQty = (existing.quantity + quantityToAdd).coerceAtMost(product.quantity)
-            currentList[index] = existing.copy(quantity = newQty)
+            currentList[index] = existing.copy(quantity = newQty, batchNo = batchNo.ifBlank { existing.batchNo })
         } else {
             val initialQty = quantityToAdd.coerceAtMost(product.quantity).coerceAtLeast(1)
-            currentList.add(CartItem(product = product, quantity = initialQty))
+            currentList.add(CartItem(product = product, quantity = initialQty, batchNo = batchNo.ifBlank { product.batchNo }))
         }
         _posCart.value = currentList
     }
