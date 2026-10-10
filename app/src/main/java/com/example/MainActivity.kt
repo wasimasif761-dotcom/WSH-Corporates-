@@ -387,7 +387,15 @@ fun MainAppScreen(
                 showRecordSaleDialog = false
                 preselectedSaleProduct = null
             },
-            onConfirmSale = { cartItems, paymentMethod, customerName, discountPercent ->
+            onConfirmSale = { cartItems, paymentMethod, customerName, customerMobile, discountPercent ->
+                // Save customer mobile into CRM database for future data/marketing (NOT printed on invoice)
+                if (customerMobile.isNotBlank()) {
+                    viewModel.createCustomer(
+                        name = customerName.ifBlank { "Retail Customer" },
+                        phone = customerMobile
+                    )
+                }
+
                 // Add items to POS cart with their batch numbers
                 viewModel.clearCart()
                 cartItems.forEach { item ->

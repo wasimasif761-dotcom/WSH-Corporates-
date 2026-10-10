@@ -28,12 +28,15 @@ import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.CreditCard
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Payments
+import androidx.compose.material.icons.filled.Percent
+import androidx.compose.material.icons.filled.Phone
 import androidx.compose.material.icons.filled.PointOfSale
 import androidx.compose.material.icons.filled.QrCodeScanner
 import androidx.compose.material.icons.filled.Receipt
 import androidx.compose.material.icons.filled.Remove
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.ShoppingCart
+import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
@@ -81,16 +84,16 @@ fun RecordSaleDialog(
     initialProduct: Product? = null,
     storeSettings: StoreSettings = StoreSettings(),
     onDismiss: () -> Unit,
-    onConfirmSale: (cartItems: List<CartItem>, paymentMethod: String, customerName: String, discountPercent: Double) -> Unit
+    onConfirmSale: (cartItems: List<CartItem>, paymentMethod: String, customerName: String, customerMobile: String, discountPercent: Double) -> Unit
 ) {
     val cartItems = remember { mutableStateListOf<CartItem>() }
     var searchQuery by remember { mutableStateOf("") }
     var selectedProduct by remember { mutableStateOf<Product?>(initialProduct) }
     var quantityInput by remember { mutableStateOf("1") }
-    var batchNoInput by remember { mutableStateOf(initialProduct?.batchNo ?: "") }
     var showBarcodeScanner by remember { mutableStateOf(false) }
 
     var customerName by remember { mutableStateOf("Walk-in Retail Customer") }
+    var customerMobile by remember { mutableStateOf("") }
     var selectedPaymentMethod by remember { mutableStateOf("Cash") }
     var discountText by remember { mutableStateOf("0") }
 
@@ -127,15 +130,14 @@ fun RecordSaleDialog(
     val taxAmount = (subtotal - discountAmount).coerceAtLeast(0.0) * (taxRate / 100.0)
     val grandTotal = (subtotal - discountAmount + taxAmount).coerceAtLeast(0.0)
 
-    fun addItemToInvoice(prod: Product, qty: Int, batch: String) {
+    fun addItemToInvoice(prod: Product, qty: Int) {
         if (qty <= 0) return
         val existingIndex = cartItems.indexOfFirst { it.product.id == prod.id }
         if (existingIndex >= 0) {
             val existing = cartItems[existingIndex]
             val newQty = (existing.quantity + qty).coerceAtMost(prod.quantity)
             cartItems[existingIndex] = existing.copy(
-                quantity = newQty,
-                batchNo = batch.ifBlank { existing.batchNo }
+                quantity = newQty
             )
         } else {
             val cappedQty = qty.coerceAtMost(prod.quantity)
@@ -143,7 +145,7 @@ fun RecordSaleDialog(
                 CartItem(
                     product = prod,
                     quantity = cappedQty,
-                    batchNo = batch.ifBlank { prod.batchNo.ifBlank { "B-2026-01" } }
+                    batchNo = prod.batchNo.ifBlank { "B-2026-01" }
                 )
             )
         }
@@ -151,7 +153,6 @@ fun RecordSaleDialog(
         searchQuery = ""
         selectedProduct = null
         quantityInput = "1"
-        batchNoInput = ""
     }
 
     Dialog(
@@ -273,7 +274,6 @@ fun RecordSaleDialog(
                                         }
                                         if (exact != null) {
                                             selectedProduct = exact
-                                            batchNoInput = exact.batchNo.ifBlank { "B-2026-01" }
                                         }
                                     },
                                     placeholder = { Text("Type name, SKU, or barcode (e.g. pan, milk)...") },
@@ -318,7 +318,6 @@ fun RecordSaleDialog(
                                                     .clip(RoundedCornerShape(6.dp))
                                                     .clickable {
                                                         selectedProduct = prod
-                                                        batchNoInput = prod.batchNo.ifBlank { "B-2026-01" }
                                                         searchQuery = prod.name
                                                     }
                                                     .padding(horizontal = 10.dp, vertical = 8.dp),
@@ -391,7 +390,7 @@ fun RecordSaleDialog(
                                             // Quantity with minus / plus
                                             Row(
                                                 verticalAlignment = Alignment.CenterVertically,
-                                                modifier = Modifier.weight(1.2f)
+                                                modifier = Modifier.weight(1.1f)
                                             ) {
                                                 IconButton(
                                                     onClick = {
@@ -409,7 +408,7 @@ fun RecordSaleDialog(
                                                     label = { Text("Qty") },
                                                     singleLine = true,
                                                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                                                    modifier = Modifier.width(60.dp)
+                                                    modifier = Modifier.width(58.dp)
                                                 )
 
                                                 IconButton(
@@ -423,21 +422,27 @@ fun RecordSaleDialog(
                                                 }
                                             }
 
-                                            // Batch Number
+                                            // Discount % (default 0% if no discount)
                                             OutlinedTextField(
-                                                value = batchNoInput,
-                                                onValueChange = { batchNoInput = it },
-                                                label = { Text("Batch #") },
-                                                placeholder = { Text("e.g. B-2026") },
+                                                value = discountText,
+                                                onValueChange = { input ->
+                                                    val filtered = input.filter { it.isDigit() || it == '.' }
+                                                    if (filtered.toDoubleOrNull() ?: 0.0 <= 100.0) {
+                                                        discountText = filtered
+                                                    }
+                                                },
+                                                label = { Text("Disc % (خصم)") },
+                                                placeholder = { Text("0") },
                                                 singleLine = true,
-                                                modifier = Modifier.weight(1f)
+                                                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                                                modifier = Modifier.weight(0.9f).testTag("input_sale_discount")
                                             )
 
                                             // Add to Invoice Button
                                             Button(
                                                 onClick = {
                                                     val qty = quantityInput.toIntOrNull() ?: 1
-                                                    addItemToInvoice(prod, qty, batchNoInput)
+                                                    addItemToInvoice(prod, qty)
                                                 },
                                                 colors = ButtonDefaults.buttonColors(containerColor = EmeraldSuccess),
                                                 shape = RoundedCornerShape(10.dp),
@@ -446,6 +451,28 @@ fun RecordSaleDialog(
                                                 Icon(Icons.Default.Add, contentDescription = null, modifier = Modifier.size(16.dp))
                                                 Spacer(modifier = Modifier.width(4.dp))
                                                 Text("+ Add", fontWeight = FontWeight.Bold)
+                                            }
+                                        }
+
+                                        // Quick Discount Chips (0%, 5%, 10%, 15%, 20%)
+                                        Spacer(modifier = Modifier.height(6.dp))
+                                        Row(
+                                            modifier = Modifier.fillMaxWidth(),
+                                            horizontalArrangement = Arrangement.spacedBy(4.dp),
+                                            verticalAlignment = Alignment.CenterVertically
+                                        ) {
+                                            Text(
+                                                text = "Discount:",
+                                                style = MaterialTheme.typography.labelSmall,
+                                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                                            )
+                                            listOf(0, 5, 10, 15, 20).forEach { disc ->
+                                                FilterChip(
+                                                    selected = (discountText.toDoubleOrNull() ?: 0.0) == disc.toDouble(),
+                                                    onClick = { discountText = disc.toString() },
+                                                    label = { Text(if (disc == 0) "0% (None)" else "$disc%") },
+                                                    modifier = Modifier.height(28.dp)
+                                                )
                                             }
                                         }
                                     }
@@ -533,7 +560,7 @@ fun RecordSaleDialog(
                                             color = MaterialTheme.colorScheme.onSurface
                                         )
                                         Text(
-                                            text = "[${item.product.displayCode}] • Batch: ${item.batchNo.ifBlank { "N/A" }}",
+                                            text = "[${item.product.displayCode}]",
                                             style = MaterialTheme.typography.labelSmall.copy(fontFamily = FontFamily.Monospace),
                                             color = MaterialTheme.colorScheme.onSurfaceVariant
                                         )
@@ -674,22 +701,64 @@ fun RecordSaleDialog(
 
                     Spacer(modifier = Modifier.height(14.dp))
 
-                    // Customer Name & Payment Method
+                    // Customer Mobile & Details (Saved in CRM database, NOT printed on invoice receipt)
                     Text(
-                        text = "Customer Reference & Payment (العميل وطريقة الدفع):",
+                        text = "Customer Mobile & Reference (بيانات العميل ورقم الجوال):",
                         style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold),
                         color = MaterialTheme.colorScheme.onSurface
                     )
                     Spacer(modifier = Modifier.height(6.dp))
 
-                    OutlinedTextField(
-                        value = customerName,
-                        onValueChange = { customerName = it },
-                        label = { Text("Customer Name / Phone / VAT #") },
-                        singleLine = true,
-                        shape = RoundedCornerShape(10.dp),
-                        modifier = Modifier.fillMaxWidth()
-                    )
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        OutlinedTextField(
+                            value = customerMobile,
+                            onValueChange = { customerMobile = it.filter { ch -> ch.isDigit() || ch == '+' } },
+                            label = { Text("Customer Mobile (رقم الجوال)") },
+                            placeholder = { Text("05XXXXXXXX") },
+                            leadingIcon = {
+                                Icon(Icons.Default.Phone, contentDescription = null, tint = CorporateBlue)
+                            },
+                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Phone),
+                            singleLine = true,
+                            shape = RoundedCornerShape(10.dp),
+                            modifier = Modifier
+                                .weight(1.2f)
+                                .testTag("customer_mobile_input")
+                        )
+
+                        OutlinedTextField(
+                            value = customerName,
+                            onValueChange = { customerName = it },
+                            label = { Text("Customer Name (الاسم)") },
+                            placeholder = { Text("Walk-in Retail Customer") },
+                            singleLine = true,
+                            shape = RoundedCornerShape(10.dp),
+                            modifier = Modifier.weight(1f)
+                        )
+                    }
+
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(top = 4.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Icon(
+                            Icons.Default.Lock,
+                            contentDescription = null,
+                            tint = EmeraldSuccess,
+                            modifier = Modifier.size(14.dp)
+                        )
+                        Spacer(modifier = Modifier.width(4.dp))
+                        Text(
+                            text = "رقم الجوال يُحفظ للبيانات وسجل العملاء • لن يُطبع على الفاتورة (Private)",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
 
                     Spacer(modifier = Modifier.height(8.dp))
 
@@ -740,7 +809,7 @@ fun RecordSaleDialog(
                     Button(
                         onClick = {
                             if (cartItems.isNotEmpty()) {
-                                onConfirmSale(cartItems.toList(), selectedPaymentMethod, customerName, discountPercent)
+                                onConfirmSale(cartItems.toList(), selectedPaymentMethod, customerName, customerMobile, discountPercent)
                             }
                         },
                         enabled = cartItems.isNotEmpty(),
@@ -774,7 +843,6 @@ fun RecordSaleDialog(
                 }
                 if (found != null) {
                     selectedProduct = found
-                    batchNoInput = found.batchNo.ifBlank { "B-2026-01" }
                     searchQuery = found.name
                 } else {
                     searchQuery = scannedCode

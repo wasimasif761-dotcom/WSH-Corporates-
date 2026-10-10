@@ -50,6 +50,7 @@ import com.example.ui.theme.EmeraldSuccess
 import com.google.mlkit.vision.barcode.BarcodeScanning
 import com.google.mlkit.vision.common.InputImage
 import java.util.concurrent.Executors
+import java.util.concurrent.atomic.AtomicBoolean
 
 @Composable
 fun BarcodeScannerDialog(
@@ -87,9 +88,33 @@ fun BarcodeScannerDialog(
     var manualInputText by remember { mutableStateOf("") }
     var isFlashEnabled by remember { mutableStateOf(false) }
     var cameraControl by remember { mutableStateOf<androidx.camera.core.CameraControl?>(null) }
+    var cameraProviderInstance by remember { mutableStateOf<ProcessCameraProvider?>(null) }
+    val analysisExecutor = remember { Executors.newSingleThreadExecutor() }
+
+    DisposableEffect(Unit) {
+        onDispose {
+            try {
+                cameraProviderInstance?.unbindAll()
+            } catch (e: Exception) {
+                // ignore
+            }
+            try {
+                analysisExecutor.shutdown()
+            } catch (e: Exception) {
+                // ignore
+            }
+        }
+    }
 
     Dialog(
-        onDismissRequest = onDismiss,
+        onDismissRequest = {
+            try {
+                cameraProviderInstance?.unbindAll()
+            } catch (e: Exception) {
+                // ignore
+            }
+            onDismiss()
+        },
         properties = DialogProperties(
             dismissOnBackPress = true,
             dismissOnClickOutside = false,
@@ -109,11 +134,13 @@ fun BarcodeScannerDialog(
                         factory = { ctx ->
                             val previewView = PreviewView(ctx).apply {
                                 scaleType = PreviewView.ScaleType.FILL_CENTER
+                                implementationMode = PreviewView.ImplementationMode.COMPATIBLE
                             }
                             val cameraProviderFuture = ProcessCameraProvider.getInstance(ctx)
                             cameraProviderFuture.addListener({
                                 try {
                                     val cameraProvider = cameraProviderFuture.get()
+                                    cameraProviderInstance = cameraProvider
                                     val preview = Preview.Builder().build().also {
                                         it.setSurfaceProvider(previewView.surfaceProvider)
                                     }
@@ -122,7 +149,6 @@ fun BarcodeScannerDialog(
                                         .setBackpressureStrategy(ImageAnalysis.STRATEGY_KEEP_ONLY_LATEST)
                                         .build()
 
-                                    val analysisExecutor = Executors.newSingleThreadExecutor()
                                     imageAnalysis.setAnalyzer(analysisExecutor, BarcodeAnalyzer { code ->
                                         // Vibrate on successful scan
                                         try {
@@ -137,8 +163,13 @@ fun BarcodeScannerDialog(
                                             // Handle vibrator exception gracefully
                                         }
 
-                                        // Trigger callback on main thread
+                                        // Trigger callback on main thread after unbinding camera
                                         previewView.post {
+                                            try {
+                                                cameraProvider.unbindAll()
+                                            } catch (e: Exception) {
+                                                // ignore
+                                            }
                                             onBarcodeScanned(code)
                                             onDismiss()
                                         }
@@ -383,16 +414,22 @@ fun ScannerOverlay() {
 @androidx.annotation.OptIn(androidx.camera.core.ExperimentalGetImage::class)
 class BarcodeAnalyzer(private val onBarcodeDetected: (String) -> Unit) : ImageAnalysis.Analyzer {
     private val scanner = BarcodeScanning.getClient()
+    private val hasDetected = AtomicBoolean(false)
 
     override fun analyze(imageProxy: ImageProxy) {
+        if (hasDetected.get()) {
+            imageProxy.close()
+            return
+        }
         val mediaImage = imageProxy.image
         if (mediaImage != null) {
             val image = InputImage.fromMediaImage(mediaImage, imageProxy.imageInfo.rotationDegrees)
             scanner.process(image)
                 .addOnSuccessListener { barcodes ->
+                    if (hasDetected.get()) return@addOnSuccessListener
                     for (barcode in barcodes) {
                         barcode.rawValue?.let { value ->
-                            if (value.isNotBlank()) {
+                            if (value.isNotBlank() && hasDetected.compareAndSet(false, true)) {
                                 onBarcodeDetected(value)
                             }
                         }

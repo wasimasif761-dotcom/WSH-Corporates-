@@ -82,6 +82,12 @@ fun InvoiceDialog(
     val customerName = firstTx.customerName.ifBlank { "Walk-in Retail Customer" }
     val paymentMethod = firstTx.paymentMethod.ifBlank { "Cash" }
 
+    // Strip any raw phone digits from printed receipt to maintain privacy (as requested)
+    val customerDisplayName = remember(customerName) {
+        val clean = customerName.replace(Regex("\\+?[0-9]{7,}"), "").trim()
+        clean.ifBlank { "Walk-in Retail Customer" }
+    }
+
     val dateFormat = SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.US)
     val invoiceDate = dateFormat.format(Date(firstTx.timestamp))
 
@@ -114,20 +120,24 @@ fun InvoiceDialog(
             appendLine("Invoice #: $invoiceNumber")
             appendLine("Date: $invoiceDate")
             appendLine("Cashier: $cashierName")
-            appendLine("Customer: $customerName")
+            appendLine("Customer: $customerDisplayName")
             appendLine("---------------------------------------")
             transactions.forEachIndexed { i, tx ->
                 val code = tx.productBarcode.ifBlank { tx.productSku }
                 appendLine("*$code    ${tx.quantitySold} x ${storeSettings.formatPrice(tx.unitPrice)}    S6")
                 appendLine(tx.productName)
-                if (tx.productBatchNo.isNotBlank()) {
-                    appendLine("  Batch: ${tx.productBatchNo}")
-                }
                 appendLine("  Total: ${storeSettings.formatPrice(tx.totalAmount)}")
             }
             appendLine("---------------------------------------")
             appendLine("Total: ${storeSettings.formatPrice(grandTotal)}")
             appendLine("Items: $totalItemsCount")
+            if (discountAmount > 0) {
+                appendLine("---------------------------------------")
+                appendLine("** Congratulations!!! **")
+                appendLine("** You have saved **")
+                appendLine("     ${storeSettings.formatPrice(discountAmount)}")
+            }
+            appendLine("---------------------------------------")
             appendLine("Payment: $paymentMethod")
             appendLine("Tax inclusive: الضريبة الشاملة")
             appendLine("Tax#  VAT%  BeforeVAT  Incl.VAT  VAT")
@@ -135,7 +145,10 @@ fun InvoiceDialog(
             appendLine("---------------------------------------")
             appendLine("Barcode: $numericReceiptCode")
             appendLine("ZATCA Compliant E-Invoice • Developed by Waseem")
-            appendLine("شكراً لتسوقكم • Thank you for shopping!")
+            appendLine("---------------------------------------")
+            appendLine("شكراً لتسوقكم")
+            appendLine("Thank you for shopping")
+            appendLine("Shop online at www.luluhypermarket.com")
         }
 
         val sendIntent = Intent().apply {
@@ -312,7 +325,7 @@ fun InvoiceDialog(
                             textAlign = TextAlign.Center
                         )
                         Text(
-                            text = "Customer: $customerName",
+                            text = "Customer: $customerDisplayName",
                             style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
                             color = Color.Black,
                             textAlign = TextAlign.Center
@@ -391,18 +404,6 @@ fun InvoiceDialog(
                                         color = Color.Black
                                     )
                                 }
-
-                                // Line 3: Batch Number (if available)
-                                if (item.productBatchNo.isNotBlank()) {
-                                    Text(
-                                        text = "Batch (رقم التشغيلة): ${item.productBatchNo}",
-                                        style = MaterialTheme.typography.labelSmall.copy(
-                                            fontSize = 9.sp,
-                                            fontFamily = FontFamily.Monospace
-                                        ),
-                                        color = Color.Gray
-                                    )
-                                }
                             }
 
                             if (idx < transactions.size - 1) {
@@ -478,6 +479,45 @@ fun InvoiceDialog(
                                 ),
                                 color = Color.Black
                             )
+                        }
+
+                        // Congratulations You have saved section (Picture 4 LuLu Style)
+                        if (discountAmount > 0) {
+                            Spacer(modifier = Modifier.height(6.dp))
+                            ReceiptDashedDivider()
+                            Spacer(modifier = Modifier.height(6.dp))
+
+                            Text(
+                                text = "** Congratulations!!! **",
+                                style = MaterialTheme.typography.bodyMedium.copy(
+                                    fontWeight = FontWeight.Black,
+                                    letterSpacing = 0.5.sp
+                                ),
+                                color = Color.Black,
+                                textAlign = TextAlign.Center,
+                                modifier = Modifier.fillMaxWidth()
+                            )
+                            Text(
+                                text = "** You have saved **",
+                                style = MaterialTheme.typography.bodySmall.copy(fontWeight = FontWeight.Bold),
+                                color = Color.Black,
+                                textAlign = TextAlign.Center,
+                                modifier = Modifier.fillMaxWidth()
+                            )
+                            Text(
+                                text = storeSettings.formatPrice(discountAmount),
+                                style = MaterialTheme.typography.titleMedium.copy(
+                                    fontWeight = FontWeight.Black,
+                                    fontFamily = FontFamily.Monospace
+                                ),
+                                color = Color.Black,
+                                textAlign = TextAlign.Center,
+                                modifier = Modifier.fillMaxWidth()
+                            )
+
+                            Spacer(modifier = Modifier.height(6.dp))
+                            ReceiptDashedDivider()
+                            Spacer(modifier = Modifier.height(6.dp))
                         }
 
                         Row(
@@ -590,15 +630,21 @@ fun InvoiceDialog(
                         ReceiptDashedDivider()
                         Spacer(modifier = Modifier.height(8.dp))
 
-                        // Footer Messages
+                        // Footer Messages (Picture 4 LuLu Style)
                         Text(
                             text = "شكراً لتسوقكم",
-                            style = MaterialTheme.typography.bodySmall.copy(fontWeight = FontWeight.Bold),
+                            style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Bold),
                             color = Color.Black,
                             textAlign = TextAlign.Center
                         )
                         Text(
-                            text = "Thank you for shopping at ${storeSettings.storeName}!",
+                            text = "Thank you for shopping",
+                            style = MaterialTheme.typography.bodySmall.copy(fontWeight = FontWeight.SemiBold),
+                            color = Color.Black,
+                            textAlign = TextAlign.Center
+                        )
+                        Text(
+                            text = "Shop online at www.luluhypermarket.com",
                             style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Medium),
                             color = Color.DarkGray,
                             textAlign = TextAlign.Center
