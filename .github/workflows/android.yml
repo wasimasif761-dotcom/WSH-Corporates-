@@ -67,17 +67,19 @@ jobs:
       uses: softprops/action-gh-release@v2
       with:
         tag_name: latest
-        name: Latest Build
+        name: "WSH Corporates Latest Build (v1.1)"
         body: |
           ### 🚀 Latest Build Completed Successfully!
           
-          Here is your raw, unzipped APK. You can download and install it directly on your Android phone:
+          Here is your raw, unzipped APK with all latest features (Multi-item billing, discount %, customer mobile recording, Saudi ZATCA invoice, savings messages). You can download and install it directly on your Android phone:
           
-          👉 **[Download app-debug.apk Directly](https://github.com/${{ github.repository }}/releases/download/latest/app-debug.apk)** (No unzip or converters needed!)
+          👉 **[Download app-debug.apk Directly](https://github.com/${{ github.repository }}/releases/download/latest/app-debug.apk)** (No unzip needed!)
           
-          _Commit: ${{ github.sha }}_
+          _Build Run: ${{ github.run_number }} | Commit: ${{ github.sha }}_
         files: app/build/outputs/apk/debug/app-debug.apk
         draft: false
         prerelease: false
+        make_latest: true
+        overwrite: true
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

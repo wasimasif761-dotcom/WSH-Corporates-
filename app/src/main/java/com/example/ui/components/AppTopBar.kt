@@ -11,6 +11,8 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.AccountCircle
+import androidx.compose.material.icons.filled.DarkMode
+import androidx.compose.material.icons.filled.LightMode
 import androidx.compose.material.icons.filled.Menu
 import androidx.compose.material.icons.filled.SmartToy
 import androidx.compose.material.icons.filled.Warning
@@ -44,6 +46,8 @@ fun AppTopBar(
     developerName: String,
     currentUserRole: String,
     currentUserFullName: String,
+    isDarkMode: Boolean = true,
+    onToggleTheme: () -> Unit = {},
     onMenuClick: () -> Unit,
     onLowStockClick: () -> Unit,
     onChatbotClick: () -> Unit,
@@ -102,6 +106,19 @@ fun AppTopBar(
             }
         },
         actions = {
+            // Dark / Light Theme Toggle
+            IconButton(
+                onClick = onToggleTheme,
+                modifier = Modifier.testTag("app_bar_theme_toggle_btn")
+            ) {
+                Icon(
+                    imageVector = if (isDarkMode) Icons.Default.LightMode else Icons.Default.DarkMode,
+                    contentDescription = if (isDarkMode) "Switch to Light Mode" else "Switch to Dark Mode",
+                    tint = if (isDarkMode) Color(0xFFFBBF24) else MaterialTheme.colorScheme.onSurface,
+                    modifier = Modifier.size(24.dp)
+                )
+            }
+
             // Chatbot robot assistant icon
             IconButton(
                 onClick = onChatbotClick,

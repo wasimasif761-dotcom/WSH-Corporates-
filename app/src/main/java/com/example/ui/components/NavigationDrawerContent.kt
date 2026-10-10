@@ -14,9 +14,11 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Analytics
+import androidx.compose.material.icons.filled.DarkMode
 import androidx.compose.material.icons.filled.Dashboard
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Inventory2
+import androidx.compose.material.icons.filled.LightMode
 import androidx.compose.material.icons.filled.LocalOffer
 import androidx.compose.material.icons.filled.PointOfSale
 import androidx.compose.material.icons.filled.QrCodeScanner
@@ -50,6 +52,8 @@ fun NavigationDrawerContent(
     lowStockCount: Int,
     developerName: String,
     storeSettings: StoreSettings,
+    isDarkMode: Boolean = true,
+    onToggleTheme: () -> Unit = {},
     onNavigate: (AppScreen) -> Unit,
     onOpenStoreSettings: () -> Unit,
     onOpenOffers: () -> Unit,
@@ -251,6 +255,23 @@ fun NavigationDrawerContent(
                 modifier = Modifier
                     .padding(vertical = 3.dp)
                     .testTag("drawer_crm")
+            )
+
+            NavigationDrawerItem(
+                label = { Text(if (isDarkMode) "Theme: Dark Mode (Active)" else "Theme: Light Mode (Active)") },
+                icon = {
+                    Icon(
+                        imageVector = if (isDarkMode) Icons.Default.DarkMode else Icons.Default.LightMode,
+                        contentDescription = null,
+                        tint = if (isDarkMode) Color(0xFF38BDF8) else Color(0xFFF59E0B)
+                    )
+                },
+                selected = false,
+                onClick = onToggleTheme,
+                shape = RoundedCornerShape(12.dp),
+                modifier = Modifier
+                    .padding(vertical = 3.dp)
+                    .testTag("drawer_theme_toggle")
             )
 
             NavigationDrawerItem(

@@ -32,6 +32,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
@@ -80,8 +81,13 @@ class MainActivity : ComponentActivity() {
         enableEdgeToEdge()
 
         setContent {
-            MyApplicationTheme {
-                MainAppScreen(viewModel = viewModel)
+            var isDarkMode by rememberSaveable { mutableStateOf(true) }
+            MyApplicationTheme(darkTheme = isDarkMode) {
+                MainAppScreen(
+                    viewModel = viewModel,
+                    isDarkMode = isDarkMode,
+                    onToggleDarkMode = { isDarkMode = !isDarkMode }
+                )
             }
         }
     }
@@ -90,6 +96,8 @@ class MainActivity : ComponentActivity() {
 @Composable
 fun MainAppScreen(
     viewModel: InventoryViewModel,
+    isDarkMode: Boolean = true,
+    onToggleDarkMode: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     val coroutineScope = rememberCoroutineScope()
@@ -163,6 +171,11 @@ fun MainAppScreen(
                 lowStockCount = dashboardStats.lowStockCount,
                 developerName = viewModel.developerName,
                 storeSettings = storeSettings,
+                isDarkMode = isDarkMode,
+                onToggleTheme = {
+                    onToggleDarkMode()
+                    coroutineScope.launch { drawerState.close() }
+                },
                 onNavigate = { screen ->
                     currentScreen = screen
                     coroutineScope.launch { drawerState.close() }
@@ -199,6 +212,8 @@ fun MainAppScreen(
                     developerName = viewModel.developerName,
                     currentUserRole = currentUser.role,
                     currentUserFullName = currentUser.fullName,
+                    isDarkMode = isDarkMode,
+                    onToggleTheme = onToggleDarkMode,
                     onMenuClick = {
                         coroutineScope.launch {
                             if (drawerState.isClosed) drawerState.open() else drawerState.close()
